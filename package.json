@@ -2,7 +2,10 @@
   "name": "estylo-barbers-tracker",
   "private": true,
   "version": "1.0.0",
-  "workspaces": ["apps/api", "apps/web"],
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
   "scripts": {
     "dev:api": "npm --workspace apps/api run start:dev",
     "dev:web": "npm --workspace apps/web run dev",
@@ -12,5 +15,8 @@
     "db:generate": "npm --workspace apps/api run prisma:generate",
     "db:migrate": "npm --workspace apps/api run prisma:migrate",
     "db:seed": "npm --workspace apps/api run prisma:seed"
+  },
+  "dependencies": {
+    "@nestjs/config": "^12.0.0"
   }
 }

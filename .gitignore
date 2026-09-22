@@ -6,4 +6,5 @@ dist/
 coverage/
 apps/api/prisma/dev.db
 backups/*.sql
-.env.local
+.env.local.env
+apps/api/.env
