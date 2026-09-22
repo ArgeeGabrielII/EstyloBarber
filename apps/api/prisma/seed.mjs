@@ -267,9 +267,8 @@ for (
     index,
     name,
   ] of [
-    'Carlo',
-    'Miguel',
-    'James',
+    'Fritz',
+    'Japol',
   ].entries()
 ) {
   await prisma.barber.upsert({
@@ -318,7 +317,7 @@ const services = [
       'Haircut',
 
     fee:
-      '300.00',
+      '180.00',
 
     displayOrder:
       1,
@@ -326,45 +325,17 @@ const services = [
 
   {
     code:
-      'KIDS',
+      'HAIRCUT + SHAMPOO',
 
     name:
-      'Kids Haircut',
+      'Haircut + Shampoo',
 
     fee:
       '250.00',
 
     displayOrder:
       2,
-  },
-
-  {
-    code:
-      'BEARD',
-
-    name:
-      'Beard Trim',
-
-    fee:
-      '150.00',
-
-    displayOrder:
-      3,
-  },
-
-  {
-    code:
-      'CUT-BEARD',
-
-    name:
-      'Haircut + Beard',
-
-    fee:
-      '400.00',
-
-    displayOrder:
-      4,
-  },
+  }
 ];
 
 for (
@@ -420,108 +391,25 @@ for (
 
 const inventoryItems = [
   {
-    sku:
-      'POMADE',
-
-    name:
-      'Pomade',
-
-    type:
-      InventoryType.RETAIL,
-
-    unit:
-      'pcs',
-
-    qty:
-      '20',
-
-    warn:
-      '8',
-
-    reorder:
-      '4',
-
-    price:
-      '350.00',
+    sku: 'POMADE',
+    name: 'Pomade',
+    type: InventoryType.RETAIL,
+    unit: 'pcs',
+    qty: '20',
+    warn: '8',
+    reorder: '4',
+    price: '250.00',
   },
-
   {
-    sku:
-      'SHAMPOO',
-
-    name:
-      'Shampoo',
-
-    type:
-      InventoryType.RETAIL_AND_CONSUMABLE,
-
-    unit:
-      'ml',
-
-    qty:
-      '5000',
-
-    warn:
-      '1200',
-
-    reorder:
-      '600',
-
-    price:
-      '280.00',
-  },
-
-  {
-    sku:
-      'WAX',
-
-    name:
-      'Hair Wax',
-
-    type:
-      InventoryType.RETAIL_AND_CONSUMABLE,
-
-    unit:
-      'ml',
-
-    qty:
-      '1500',
-
-    warn:
-      '400',
-
-    reorder:
-      '200',
-
-    price:
-      '320.00',
-  },
-
-  {
-    sku:
-      'RAZOR',
-
-    name:
-      'Razor Blade',
-
-    type:
-      InventoryType.CONSUMABLE,
-
-    unit:
-      'pcs',
-
-    qty:
-      '100',
-
-    warn:
-      '30',
-
-    reorder:
-      '20',
-
-    price:
-      null,
-  },
+    sku: 'TEXTURED_POWDER',
+    name: 'Textured Powder',
+    type: InventoryType.RETAIL,
+    unit: 'pcs',
+    qty: '20',
+    warn: '8',
+    reorder: '4',
+    price: '250.00',
+  }
 ];
 
 for (
