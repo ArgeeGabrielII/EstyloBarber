@@ -1,6 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
-import { api, money } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
+import {
+  api,
+  money,
+} from '../api/client';
+
+import {
+  useAuth,
+} from '../auth/AuthContext';
 
 type Barber = {
   id: string;
@@ -34,11 +45,13 @@ type Line<T> = {
 
 type CheckoutResult = {
   totalCollected: string;
+
   serviceTransaction?: {
     transactionId: string;
     amount: string;
     tip: string;
   };
+
   itemTransaction?: {
     transactionId: string;
     amount: string;
@@ -46,211 +59,647 @@ type CheckoutResult = {
 };
 
 export function CashierPage() {
-  const { user, logout } = useAuth();
+  const {
+    user,
+    logout,
+  } =
+    useAuth();
 
-  const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [seats, setSeats] = useState<Seat[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [
+    barbers,
+    setBarbers,
+  ] =
+    useState<
+      Barber[]
+    >([]);
 
-  const [barberId, setBarberId] = useState('');
-  const [seatId, setSeatId] = useState('');
+  const [
+    seats,
+    setSeats,
+  ] =
+    useState<
+      Seat[]
+    >([]);
 
-  const [idempotencyKey, setIdempotencyKey] = useState(() =>
-    crypto.randomUUID(),
-  );
+  const [
+    services,
+    setServices,
+  ] =
+    useState<
+      Service[]
+    >([]);
 
-  const [svc, setSvc] = useState<Record<string, Line<Service>>>({});
-  const [items, setItems] = useState<Record<string, Line<Product>>>({});
+  const [
+    products,
+    setProducts,
+  ] =
+    useState<
+      Product[]
+    >([]);
 
-  const [tip, setTip] = useState('0');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [done, setDone] = useState<CheckoutResult | null>(null);
+  const [
+    barberId,
+    setBarberId,
+  ] =
+    useState('');
+
+  const [
+    seatId,
+    setSeatId,
+  ] =
+    useState('');
+
+  const [
+    idempotencyKey,
+    setIdempotencyKey,
+  ] =
+    useState(
+      () =>
+        crypto.randomUUID(),
+    );
+
+  const [
+    svc,
+    setSvc,
+  ] =
+    useState<
+      Record<
+        string,
+        Line<Service>
+      >
+    >({});
+
+  const [
+    items,
+    setItems,
+  ] =
+    useState<
+      Record<
+        string,
+        Line<Product>
+      >
+    >({});
+
+  const [
+    tip,
+    setTip,
+  ] =
+    useState('0');
+
+  const [
+    busy,
+    setBusy,
+  ] =
+    useState(false);
+
+  const [
+    error,
+    setError,
+  ] =
+    useState('');
+
+  const [
+    done,
+    setDone,
+  ] =
+    useState<
+      CheckoutResult | null
+    >(null);
+
+  const [
+    confirmOpen,
+    setConfirmOpen,
+  ] =
+    useState(false);
 
   useEffect(() => {
     Promise.all([
-      api<Barber[]>('/barbers'),
-      api<Seat[]>('/seats'),
-      api<Service[]>('/services'),
-      api<Product[]>('/inventory/retail'),
+      api<Barber[]>(
+        '/barbers',
+      ),
+
+      api<Seat[]>(
+        '/seats',
+      ),
+
+      api<Service[]>(
+        '/services',
+      ),
+
+      api<Product[]>(
+        '/inventory/retail',
+      ),
     ])
-      .then(([barberData, seatData, serviceData, productData]) => {
-        setBarbers(barberData);
-        setSeats(seatData);
-        setServices(serviceData);
-        setProducts(productData);
-      })
-      .catch((e: Error) => {
-        setError(e.message);
-      });
+      .then(
+        ([
+          barberData,
+          seatData,
+          serviceData,
+          productData,
+        ]) => {
+          setBarbers(
+            barberData,
+          );
+
+          setSeats(
+            seatData,
+          );
+
+          setServices(
+            serviceData,
+          );
+
+          setProducts(
+            productData,
+          );
+        },
+      )
+      .catch(
+        (
+          e: Error,
+        ) => {
+          setError(
+            e.message,
+          );
+        },
+      );
   }, []);
 
-  const serviceTotal = useMemo(
-    () =>
-      Object.values(svc).reduce(
-        (total, line) => total + Number(line.data.fee) * line.qty,
-        0,
-      ),
-    [svc],
-  );
+  const selectedBarber =
+    useMemo(
+      () =>
+        barbers.find(
+          (
+            barber,
+          ) =>
+            barber.id ===
+            barberId,
+        ),
+      [
+        barbers,
+        barberId,
+      ],
+    );
 
-  const itemTotal = useMemo(
-    () =>
-      Object.values(items).reduce(
-        (total, line) =>
-          total + Number(line.data.sellingPrice) * line.qty,
-        0,
-      ),
-    [items],
-  );
+  const selectedSeat =
+    useMemo(
+      () =>
+        seats.find(
+          (
+            seat,
+          ) =>
+            seat.id ===
+            seatId,
+        ),
+      [
+        seats,
+        seatId,
+      ],
+    );
 
-  const grand = serviceTotal + itemTotal + (Number(tip) || 0);
+  const serviceTotal =
+    useMemo(
+      () =>
+        Object.values(
+          svc,
+        ).reduce(
+          (
+            total,
+            line,
+          ) =>
+            total +
+            Number(
+              line.data
+                .fee,
+            ) *
+              line.qty,
 
-  const addSvc = (service: Service) => {
-    setSvc((current) => ({
-      ...current,
-      [service.id]: {
-        data: service,
-        qty: (current[service.id]?.qty ?? 0) + 1,
-      },
-    }));
+          0,
+        ),
+
+      [
+        svc,
+      ],
+    );
+
+  const itemTotal =
+    useMemo(
+      () =>
+        Object.values(
+          items,
+        ).reduce(
+          (
+            total,
+            line,
+          ) =>
+            total +
+            Number(
+              line.data
+                .sellingPrice,
+            ) *
+              line.qty,
+
+          0,
+        ),
+
+      [
+        items,
+      ],
+    );
+
+  const tipAmount =
+    Number(
+      tip,
+    ) || 0;
+
+  const grand =
+    serviceTotal +
+    itemTotal +
+    tipAmount;
+
+  const addSvc = (
+    service: Service,
+  ) => {
+    setSvc(
+      (
+        current,
+      ) => ({
+        ...current,
+
+        [service.id]: {
+          data:
+            service,
+
+          qty:
+            (
+              current[
+                service.id
+              ]?.qty ??
+              0
+            ) + 1,
+        },
+      }),
+    );
   };
 
-  const addItem = (product: Product) => {
-    setItems((current) => ({
-      ...current,
-      [product.id]: {
-        data: product,
-        qty: (current[product.id]?.qty ?? 0) + 1,
-      },
-    }));
+  const addItem = (
+    product: Product,
+  ) => {
+    setItems(
+      (
+        current,
+      ) => ({
+        ...current,
+
+        [product.id]: {
+          data:
+            product,
+
+          qty:
+            (
+              current[
+                product.id
+              ]?.qty ??
+              0
+            ) + 1,
+        },
+      }),
+    );
   };
 
   const change = (
-    kind: 'svc' | 'item',
+    kind:
+      | 'svc'
+      | 'item',
+
     id: string,
+
     delta: number,
   ) => {
-    const setter = kind === 'svc' ? setSvc : setItems;
+    if (
+      kind ===
+      'svc'
+    ) {
+      setSvc(
+        (
+          current,
+        ) => {
+          const newQuantity =
+            (
+              current[
+                id
+              ]?.qty ??
+              0
+            ) +
+            delta;
 
-    setter((current: any) => {
-      const newQuantity = (current[id]?.qty ?? 0) + delta;
-      const updated = { ...current };
+          const updated = {
+            ...current,
+          };
 
-      if (newQuantity <= 0) {
-        delete updated[id];
-      } else {
-        updated[id] = {
-          ...current[id],
-          qty: newQuantity,
+          if (
+            newQuantity <=
+            0
+          ) {
+            delete updated[
+              id
+            ];
+          } else {
+            updated[id] = {
+              ...current[
+                id
+              ],
+
+              qty:
+                newQuantity,
+            };
+          }
+
+          return updated;
+        },
+      );
+
+      return;
+    }
+
+    setItems(
+      (
+        current,
+      ) => {
+        const newQuantity =
+          (
+            current[
+              id
+            ]?.qty ??
+              0
+          ) +
+          delta;
+
+        const updated = {
+          ...current,
         };
-      }
 
-      return updated;
-    });
+        if (
+          newQuantity <=
+          0
+        ) {
+          delete updated[
+            id
+          ];
+        } else {
+          updated[id] = {
+            ...current[
+              id
+            ],
+
+            qty:
+              newQuantity,
+          };
+        }
+
+        return updated;
+      },
+    );
   };
 
-  /**
-   * Clears the active transaction.
+  const resetTransaction =
+    () => {
+      setBarberId(
+        '',
+      );
+
+      setSeatId(
+        '',
+      );
+
+      setSvc(
+        {},
+      );
+
+      setItems(
+        {},
+      );
+
+      setTip(
+        '0',
+      );
+
+      setError(
+        '',
+      );
+
+      setConfirmOpen(
+        false,
+      );
+
+      setIdempotencyKey(
+        crypto.randomUUID(),
+      );
+    };
+
+  const clear =
+    () => {
+      resetTransaction();
+
+      setDone(
+        null,
+      );
+    };
+
+  /*
+   * COMPLETE SALE BUTTON
    *
-   * Includes:
-   * - barber
-   * - seat
-   * - services
-   * - products
-   * - quantities
-   * - tip
-   * - errors
+   * Does NOT save yet.
+   * It first validates the transaction,
+   * then opens the confirmation dialog.
    */
-  const resetTransaction = () => {
-    setBarberId('');
-    setSeatId('');
+  function requestConfirmation() {
+    setError(
+      '',
+    );
 
-    setSvc({});
-    setItems({});
+    const hasServices =
+      Object.keys(
+        svc,
+      ).length >
+      0;
 
-    setTip('0');
-    setError('');
+    const hasItems =
+      Object.keys(
+        items,
+      ).length >
+      0;
 
-    setIdempotencyKey(crypto.randomUUID());
-  };
+    if (
+      !hasServices &&
+      !hasItems
+    ) {
+      setError(
+        'Select at least one service or product.',
+      );
 
-  /**
-   * CLEAR button
-   *
-   * Also dismisses any previous completed-sale dialog.
-   */
-  const clear = () => {
-    resetTransaction();
-    setDone(null);
-  };
-
-  async function complete() {
-    setError('');
-
-    const hasServices = Object.keys(svc).length > 0;
-
-    if (hasServices && !barberId) {
-      setError('Select a barber for the service.');
       return;
     }
 
-    if (hasServices && !seatId) {
-      setError('Select a seat for the service.');
+    if (
+      hasServices &&
+      !barberId
+    ) {
+      setError(
+        'Select a barber for the service.',
+      );
+
       return;
     }
 
-    setBusy(true);
+    if (
+      hasServices &&
+      !seatId
+    ) {
+      setError(
+        'Select a seat for the service.',
+      );
+
+      return;
+    }
+
+    if (
+      tipAmount <
+      0
+    ) {
+      setError(
+        'Tip cannot be negative.',
+      );
+
+      return;
+    }
+
+    setConfirmOpen(
+      true,
+    );
+  }
+
+  /*
+   * CONFIRM SALE
+   *
+   * This is the actual save operation.
+   */
+  async function confirmSale() {
+    setError(
+      '',
+    );
+
+    setBusy(
+      true,
+    );
 
     try {
-      const result = await api<CheckoutResult>('/checkouts', {
-        method: 'POST',
-        body: JSON.stringify({
-          idempotencyKey,
+      const result =
+        await api<CheckoutResult>(
+          '/checkouts',
+          {
+            method:
+              'POST',
 
-          barberId: barberId || undefined,
-          seatId: seatId || undefined,
+            body:
+              JSON.stringify(
+                {
+                  idempotencyKey,
 
-          services: Object.values(svc).map((line) => ({
-            serviceId: line.data.id,
-            quantity: line.qty,
-          })),
+                  barberId:
+                    barberId ||
+                    undefined,
 
-          items: Object.values(items).map((line) => ({
-            inventoryItemId: line.data.id,
-            quantity: String(line.qty),
-          })),
+                  seatId:
+                    seatId ||
+                    undefined,
 
-          tip: String(Number(tip) || 0),
-        }),
-      });
+                  services:
+                    Object.values(
+                      svc,
+                    ).map(
+                      (
+                        line,
+                      ) => ({
+                        serviceId:
+                          line
+                            .data
+                            .id,
 
-      /*
-       * Keep the completed-sale overlay visible,
-       * but reset everything behind it.
-       */
-      setDone(result);
+                        quantity:
+                          line.qty,
+                      }),
+                    ),
+
+                  items:
+                    Object.values(
+                      items,
+                    ).map(
+                      (
+                        line,
+                      ) => ({
+                        inventoryItemId:
+                          line
+                            .data
+                            .id,
+
+                        quantity:
+                          String(
+                            line.qty,
+                          ),
+                      }),
+                    ),
+
+                  tip:
+                    String(
+                      tipAmount,
+                    ),
+                },
+              ),
+          },
+        );
+
+      setConfirmOpen(
+        false,
+      );
+
+      setDone(
+        result,
+      );
+
       resetTransaction();
     } catch (e) {
+      setConfirmOpen(
+        false,
+      );
+
       setError(
-        e instanceof Error
+        e instanceof
+          Error
           ? e.message
-          : 'Checkout failed',
+          : 'Checkout failed.',
       );
     } finally {
-      setBusy(false);
+      setBusy(
+        false,
+      );
     }
   }
 
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = '/login';
-  };
+  const handleLogout =
+    async () => {
+      await logout();
+
+      window.location.href =
+        '/login';
+    };
 
   return (
     <div className="pos">
-      {/* HEADER */}
+      {/* ==================================================
+          HEADER
+      ================================================== */}
+
       <header className="pos-header">
         <div className="pos-brand">
           <img
@@ -259,20 +708,32 @@ export function CashierPage() {
           />
 
           <div>
-            <b>ESTYLO CASHIER</b>
-            <small>Touch POS</small>
+            <b>
+              ESTYLO CASHIER
+            </b>
+
+            <small>
+              Touch POS
+            </small>
           </div>
         </div>
 
         <div className="pos-user">
-          <strong>{user?.displayName}</strong>
+          <strong>
+            {
+              user?.displayName
+            }
+          </strong>
 
           <small>
             Cashier ·{' '}
+
             <button
               type="button"
               className="btn btn-link btn-sm p-0 text-secondary"
-              onClick={handleLogout}
+              onClick={
+                handleLogout
+              }
             >
               Logout
             </button>
@@ -281,7 +742,10 @@ export function CashierPage() {
       </header>
 
       <div className="pos-grid">
-        {/* LEFT PANEL */}
+        {/* ==================================================
+            LEFT
+        ================================================== */}
+
         <section className="pos-left">
           {error && (
             <div className="alert alert-danger">
@@ -290,162 +754,224 @@ export function CashierPage() {
           )}
 
           {/* BARBER */}
+
           <div className="section-label">
             SELECT BARBER
           </div>
 
           <div className="choice-grid">
-            {barbers.map((barber) => {
-              const selected =
-                barberId === barber.id;
+            {barbers.map(
+              (
+                barber,
+              ) => {
+                const selected =
+                  barberId ===
+                  barber.id;
 
-              return (
-                <button
-                  type="button"
-                  key={barber.id}
-                  className={`choice-btn ${
-                    selected ? 'selected' : ''
-                  }`}
-                  onClick={() =>
-                    setBarberId(barber.id)
-                  }
-                >
-                  {barber.name}
+                return (
+                  <button
+                    type="button"
+                    key={
+                      barber.id
+                    }
+                    className={`choice-btn ${
+                      selected
+                        ? 'selected'
+                        : ''
+                    }`}
+                    onClick={() =>
+                      setBarberId(
+                        barber.id,
+                      )
+                    }
+                  >
+                    {
+                      barber.name
+                    }
 
-                  <small>
-                    {selected
-                      ? 'Selected'
-                      : 'Tap to select'}
-                  </small>
-                </button>
-              );
-            })}
+                    <small>
+                      {selected
+                        ? 'Selected'
+                        : 'Tap to select'}
+                    </small>
+                  </button>
+                );
+              },
+            )}
           </div>
 
           {/* SEAT */}
+
           <div className="section-label">
             SELECT SEAT
           </div>
 
           <div className="choice-grid">
-            {seats.map((seat) => {
-              const selected =
-                seatId === seat.id;
+            {seats.map(
+              (
+                seat,
+              ) => {
+                const selected =
+                  seatId ===
+                  seat.id;
 
-              return (
-                <button
-                  type="button"
-                  key={seat.id}
-                  className={`choice-btn ${
-                    selected ? 'selected' : ''
-                  }`}
-                  onClick={() =>
-                    setSeatId(seat.id)
-                  }
-                >
-                  {seat.name}
+                return (
+                  <button
+                    type="button"
+                    key={
+                      seat.id
+                    }
+                    className={`choice-btn ${
+                      selected
+                        ? 'selected'
+                        : ''
+                    }`}
+                    onClick={() =>
+                      setSeatId(
+                        seat.id,
+                      )
+                    }
+                  >
+                    {
+                      seat.name
+                    }
 
-                  <small>
-                    Station {seat.number}
-                    {selected ? ' · Selected' : ''}
-                  </small>
-                </button>
-              );
-            })}
+                    <small>
+                      Station{' '}
+                      {
+                        seat.number
+                      }
+
+                      {selected
+                        ? ' · Selected'
+                        : ''}
+                    </small>
+                  </button>
+                );
+              },
+            )}
           </div>
 
           {/* SERVICES */}
+
           <div className="section-label">
             SELECT SERVICE
           </div>
 
           <div className="service-grid mb-4">
-            {services.map((service) => (
-              <button
-                type="button"
-                className="tile"
-                key={service.id}
-                onClick={() => addSvc(service)}
-              >
-                <strong>
-                  {service.name}
-                </strong>
+            {services.map(
+              (
+                service,
+              ) => (
+                <button
+                  type="button"
+                  className="tile"
+                  key={
+                    service.id
+                  }
+                  onClick={() =>
+                    addSvc(
+                      service,
+                    )
+                  }
+                >
+                  <strong>
+                    {
+                      service.name
+                    }
+                  </strong>
 
-                <span>
-                  {money(service.fee)}
-                </span>
-              </button>
-            ))}
+                  <span>
+                    {money(
+                      service.fee,
+                    )}
+                  </span>
+                </button>
+              ),
+            )}
           </div>
 
           {/* PRODUCTS */}
+
           <div className="section-label">
             PRODUCTS
           </div>
 
           <div className="product-grid">
-            {products.map((product) => (
-              <button
-                type="button"
-                className="tile"
-                key={product.id}
-                onClick={() =>
-                  addItem(product)
-                }
-              >
-                <strong>
-                  {product.name}
-                </strong>
+            {products.map(
+              (
+                product,
+              ) => (
+                <button
+                  type="button"
+                  className="tile"
+                  key={
+                    product.id
+                  }
+                  onClick={() =>
+                    addItem(
+                      product,
+                    )
+                  }
+                >
+                  <strong>
+                    {
+                      product.name
+                    }
+                  </strong>
 
-                <small>
-                  {product.quantityOnHand}{' '}
-                  {product.unit} available
-                </small>
+                  <small>
+                    {
+                      product.quantityOnHand
+                    }{' '}
+                    {
+                      product.unit
+                    }{' '}
+                    available
+                  </small>
 
-                <span>
-                  {money(
-                    product.sellingPrice,
-                  )}
-                </span>
-              </button>
-            ))}
+                  <span>
+                    {money(
+                      product.sellingPrice,
+                    )}
+                  </span>
+                </button>
+              ),
+            )}
           </div>
         </section>
 
-        {/* RIGHT PANEL */}
+        {/* ==================================================
+            RIGHT
+        ================================================== */}
+
         <aside className="pos-right">
           <div className="section-label">
             CURRENT SALE
           </div>
 
-          {/* CURRENT BARBER / SEAT */}
-          {(barberId || seatId) && (
+          {(selectedBarber ||
+            selectedSeat) && (
             <div className="mb-3">
-              {barberId && (
+              {selectedBarber && (
                 <small className="d-block">
                   Barber:{' '}
+
                   <strong>
                     {
-                      barbers.find(
-                        (barber) =>
-                          barber.id ===
-                          barberId,
-                      )?.name
+                      selectedBarber.name
                     }
                   </strong>
                 </small>
               )}
 
-              {seatId && (
+              {selectedSeat && (
                 <small className="d-block">
                   Seat:{' '}
+
                   <strong>
                     {
-                      seats.find(
-                        (seat) =>
-                          seat.id ===
-                          seatId,
-                      )?.name
+                      selectedSeat.name
                     }
                   </strong>
                 </small>
@@ -454,29 +980,53 @@ export function CashierPage() {
           )}
 
           <div className="sale-lines">
-            {!Object.keys(svc).length &&
-              !Object.keys(items).length && (
+            {!Object.keys(
+              svc,
+            ).length &&
+              !Object.keys(
+                items,
+              ).length && (
                 <div className="empty">
-                  Select a service or
+                  Select a
+                  service or
                   product.
                 </div>
               )}
 
-            {/* SERVICES */}
-            {Object.entries(svc).map(
-              ([id, line]) => (
+            {/* SERVICE LINES */}
+
+            {Object.entries(
+              svc,
+            ).map(
+              ([
+                id,
+                line,
+              ]) => (
                 <div
                   className="sale-line"
-                  key={id}
+                  key={
+                    id
+                  }
                 >
                   <div>
                     <strong>
-                      {line.data.name}
+                      {
+                        line
+                          .data
+                          .name
+                      }
                     </strong>
 
                     <small>
-                      {money(line.data.fee)} ×{' '}
-                      {line.qty}
+                      {money(
+                        line
+                          .data
+                          .fee,
+                      )}{' '}
+                      ×{' '}
+                      {
+                        line.qty
+                      }
                     </small>
                   </div>
 
@@ -495,7 +1045,11 @@ export function CashierPage() {
                       −
                     </button>
 
-                    <b>{line.qty}</b>
+                    <b>
+                      {
+                        line.qty
+                      }
+                    </b>
 
                     <button
                       type="button"
@@ -515,24 +1069,40 @@ export function CashierPage() {
               ),
             )}
 
-            {/* PRODUCTS */}
-            {Object.entries(items).map(
-              ([id, line]) => (
+            {/* PRODUCT LINES */}
+
+            {Object.entries(
+              items,
+            ).map(
+              ([
+                id,
+                line,
+              ]) => (
                 <div
                   className="sale-line"
-                  key={id}
+                  key={
+                    id
+                  }
                 >
                   <div>
                     <strong>
-                      {line.data.name}
+                      {
+                        line
+                          .data
+                          .name
+                      }
                     </strong>
 
                     <small>
                       {money(
-                        line.data
+                        line
+                          .data
                           .sellingPrice,
                       )}{' '}
-                      × {line.qty}
+                      ×{' '}
+                      {
+                        line.qty
+                      }
                     </small>
                   </div>
 
@@ -551,7 +1121,11 @@ export function CashierPage() {
                       −
                     </button>
 
-                    <b>{line.qty}</b>
+                    <b>
+                      {
+                        line.qty
+                      }
+                    </b>
 
                     <button
                       type="button"
@@ -573,62 +1147,425 @@ export function CashierPage() {
           </div>
 
           {/* TOTALS */}
+
           <div className="totals">
             <div className="total-row">
-              <span>Service</span>
-              <b>{money(serviceTotal)}</b>
+              <span>
+                Service
+              </span>
+
+              <b>
+                {money(
+                  serviceTotal,
+                )}
+              </b>
             </div>
 
             <div className="total-row">
-              <span>Items</span>
-              <b>{money(itemTotal)}</b>
+              <span>
+                Items
+              </span>
+
+              <b>
+                {money(
+                  itemTotal,
+                )}
+              </b>
             </div>
 
             <div className="total-row align-items-center">
-              <span>Tip</span>
+              <span>
+                Tip
+              </span>
 
               <input
                 className="tip-input"
                 inputMode="decimal"
-                value={tip}
-                onChange={(e) =>
-                  setTip(e.target.value)
+                value={
+                  tip
+                }
+                onChange={(
+                  e,
+                ) =>
+                  setTip(
+                    e.target
+                      .value,
+                  )
                 }
               />
             </div>
 
             <div className="total-row grand-total">
-              <span>TOTAL</span>
-              <span>{money(grand)}</span>
+              <span>
+                TOTAL
+              </span>
+
+              <span>
+                {money(
+                  grand,
+                )}
+              </span>
             </div>
           </div>
 
           {/* ACTIONS */}
+
           <button
             type="button"
             className="btn btn-estylo complete-btn"
             disabled={
-              busy || grand <= 0
+              busy ||
+              grand <=
+                0
             }
-            onClick={complete}
+            onClick={
+              requestConfirmation
+            }
           >
-            {busy
-              ? 'PROCESSING…'
-              : 'COMPLETE SALE'}
+            COMPLETE SALE
           </button>
 
           <button
             type="button"
             className="btn btn-outline-secondary clear-btn"
-            disabled={busy}
-            onClick={clear}
+            disabled={
+              busy
+            }
+            onClick={
+              clear
+            }
           >
             CLEAR
           </button>
         </aside>
       </div>
 
-      {/* SUCCESS DIALOG */}
+      {/* ==================================================
+          CONFIRMATION DIALOG
+      ================================================== */}
+
+      {confirmOpen && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{
+            backgroundColor:
+              'rgba(0,0,0,0.65)',
+
+            zIndex:
+              9999,
+
+            padding:
+              '20px',
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="card shadow-lg"
+            style={{
+              width:
+                '100%',
+
+              maxWidth:
+                '560px',
+
+              maxHeight:
+                '90vh',
+
+              overflowY:
+                'auto',
+
+              borderRadius:
+                '16px',
+            }}
+          >
+            <div className="card-body p-4">
+              <div className="text-center mb-4">
+                <div
+                  style={{
+                    fontSize:
+                      '2.5rem',
+
+                    lineHeight:
+                      1,
+                  }}
+                >
+                  ?
+                </div>
+
+                <h3 className="mt-3 mb-1">
+                  Confirm Sale
+                </h3>
+
+                <p className="text-muted mb-0">
+                  Please review
+                  the transaction
+                  before saving.
+                </p>
+              </div>
+
+              {/* BARBER / SEAT */}
+
+              {Object.keys(
+                svc,
+              ).length >
+                0 && (
+                <div className="bg-light rounded p-3 mb-3">
+                  <div className="row">
+                    <div className="col-6">
+                      <small className="text-muted d-block">
+                        Barber
+                      </small>
+
+                      <strong>
+                        {
+                          selectedBarber
+                            ?.name
+                        }
+                      </strong>
+                    </div>
+
+                    <div className="col-6">
+                      <small className="text-muted d-block">
+                        Seat
+                      </small>
+
+                      <strong>
+                        {
+                          selectedSeat
+                            ?.name
+                        }
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SERVICES */}
+
+              {Object.values(
+                svc,
+              ).length >
+                0 && (
+                <div className="mb-4">
+                  <h6>
+                    Services
+                  </h6>
+
+                  {Object.values(
+                    svc,
+                  ).map(
+                    (
+                      line,
+                    ) => (
+                      <div
+                        key={
+                          line
+                            .data
+                            .id
+                        }
+                        className="d-flex justify-content-between border-bottom py-2"
+                      >
+                        <div>
+                          <strong>
+                            {
+                              line
+                                .data
+                                .name
+                            }
+                          </strong>
+
+                          <div className="small text-muted">
+                            {
+                              line.qty
+                            }{' '}
+                            ×{' '}
+                            {money(
+                              line
+                                .data
+                                .fee,
+                            )}
+                          </div>
+                        </div>
+
+                        <strong>
+                          {money(
+                            Number(
+                              line
+                                .data
+                                .fee,
+                            ) *
+                              line.qty,
+                          )}
+                        </strong>
+                      </div>
+                    ),
+                  )}
+                </div>
+              )}
+
+              {/* PRODUCTS */}
+
+              {Object.values(
+                items,
+              ).length >
+                0 && (
+                <div className="mb-4">
+                  <h6>
+                    Products
+                  </h6>
+
+                  {Object.values(
+                    items,
+                  ).map(
+                    (
+                      line,
+                    ) => (
+                      <div
+                        key={
+                          line
+                            .data
+                            .id
+                        }
+                        className="d-flex justify-content-between border-bottom py-2"
+                      >
+                        <div>
+                          <strong>
+                            {
+                              line
+                                .data
+                                .name
+                            }
+                          </strong>
+
+                          <div className="small text-muted">
+                            {
+                              line.qty
+                            }{' '}
+                            ×{' '}
+                            {money(
+                              line
+                                .data
+                                .sellingPrice,
+                            )}
+                          </div>
+                        </div>
+
+                        <strong>
+                          {money(
+                            Number(
+                              line
+                                .data
+                                .sellingPrice,
+                            ) *
+                              line.qty,
+                          )}
+                        </strong>
+                      </div>
+                    ),
+                  )}
+                </div>
+              )}
+
+              {/* CONFIRM TOTALS */}
+
+              <div className="bg-light rounded p-3 mb-4">
+                <div className="d-flex justify-content-between mb-2">
+                  <span>
+                    Service
+                  </span>
+
+                  <strong>
+                    {money(
+                      serviceTotal,
+                    )}
+                  </strong>
+                </div>
+
+                <div className="d-flex justify-content-between mb-2">
+                  <span>
+                    Products
+                  </span>
+
+                  <strong>
+                    {money(
+                      itemTotal,
+                    )}
+                  </strong>
+                </div>
+
+                <div className="d-flex justify-content-between mb-2">
+                  <span>
+                    Tip
+                  </span>
+
+                  <strong>
+                    {money(
+                      tipAmount,
+                    )}
+                  </strong>
+                </div>
+
+                <hr />
+
+                <div className="d-flex justify-content-between">
+                  <strong>
+                    TOTAL
+                  </strong>
+
+                  <strong
+                    style={{
+                      fontSize:
+                        '1.4rem',
+                    }}
+                  >
+                    {money(
+                      grand,
+                    )}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary flex-fill"
+                  disabled={
+                    busy
+                  }
+                  onClick={() =>
+                    setConfirmOpen(
+                      false,
+                    )
+                  }
+                >
+                  CANCEL
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-estylo flex-fill"
+                  disabled={
+                    busy
+                  }
+                  onClick={() =>
+                    void confirmSale()
+                  }
+                >
+                  {busy
+                    ? 'SAVING...'
+                    : 'CONFIRM SALE'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================
+          SUCCESS DIALOG
+      ================================================== */}
+
       {done && (
         <div className="success-overlay">
           <div className="success-card">
@@ -636,7 +1573,9 @@ export function CashierPage() {
               ✓
             </div>
 
-            <h2>SALE COMPLETED</h2>
+            <h2>
+              SALE COMPLETED
+            </h2>
 
             {done.serviceTransaction && (
               <p>
@@ -679,7 +1618,8 @@ export function CashierPage() {
 
                 Items{' '}
                 {money(
-                  done.itemTransaction
+                  done
+                    .itemTransaction
                     .amount,
                 )}
               </p>
@@ -695,7 +1635,9 @@ export function CashierPage() {
               type="button"
               className="btn btn-estylo mt-3 px-5 py-2"
               onClick={() =>
-                setDone(null)
+                setDone(
+                  null,
+                )
               }
             >
               NEW TRANSACTION

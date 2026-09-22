@@ -1,26 +1,705 @@
-import { PrismaClient, UserRole, InventoryType, InventoryMovementType } from '@prisma/client';
+import {
+  PrismaClient,
+  UserRole,
+  InventoryType,
+  InventoryMovementType,
+} from '@prisma/client';
+
 import argon2 from 'argon2';
-const prisma = new PrismaClient();
-const passwordHash = await argon2.hash('Estylo123!');
-for (const [username, displayName, role] of [['admin','Estylo Admin',UserRole.ADMIN],['cashier','Maria Cashier',UserRole.CASHIER],['viewer','Report Viewer',UserRole.VIEWER]]) {
-  await prisma.user.upsert({ where:{username}, update:{displayName,role,active:true}, create:{username,displayName,role,active:true,passwordHash} });
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/*
+ * ============================================================
+ * ENVIRONMENT
+ * ============================================================
+ *
+ * seed.mjs is expected to be located at:
+ *
+ * apps/api/prisma/seed.mjs
+ *
+ * Environment file:
+ *
+ * apps/api/.env
+ * ============================================================
+ */
+
+const __filename = fileURLToPath(
+  import.meta.url,
+);
+
+const __dirname = path.dirname(
+  __filename,
+);
+
+const envPath = path.resolve(
+  __dirname,
+  '../.env',
+);
+
+dotenv.config({
+  path: envPath,
+});
+
+/*
+ * ============================================================
+ * REQUIRED ENV HELPER
+ * ============================================================
+ */
+
+function requiredEnv(name) {
+  const value =
+    process.env[name];
+
+  if (
+    !value ||
+    !value.trim()
+  ) {
+    throw new Error(
+      `Missing required environment variable: ${name}`,
+    );
+  }
+
+  return value;
 }
-const admin=await prisma.user.findUniqueOrThrow({where:{username:'admin'}});
-for (const number of [1,2,3]) await prisma.seat.upsert({where:{number},update:{active:true},create:{number,name:`Seat ${number}`}});
-for (const [i,name] of ['Carlo','Miguel','James'].entries()) await prisma.barber.upsert({where:{code:`BARBER-${i+1}`},update:{name,active:true,displayOrder:i+1},create:{code:`BARBER-${i+1}`,name,displayOrder:i+1}});
-for (const [code,name,fee,displayOrder] of [['HAIRCUT','Haircut','300.00',1],['KIDS','Kids Haircut','250.00',2],['BEARD','Beard Trim','150.00',3],['CUT-BEARD','Haircut + Beard','400.00',4]]) await prisma.service.upsert({where:{code},update:{name,fee,displayOrder,active:true},create:{code,name,fee,displayOrder}});
-const list=[
- {sku:'POMADE',name:'Pomade',type:InventoryType.RETAIL,unit:'pcs',qty:'20',warn:'8',reorder:'4',price:'350.00'},
- {sku:'SHAMPOO',name:'Shampoo',type:InventoryType.RETAIL_AND_CONSUMABLE,unit:'ml',qty:'5000',warn:'1200',reorder:'600',price:'280.00'},
- {sku:'WAX',name:'Hair Wax',type:InventoryType.RETAIL_AND_CONSUMABLE,unit:'ml',qty:'1500',warn:'400',reorder:'200',price:'320.00'},
- {sku:'RAZOR',name:'Razor Blade',type:InventoryType.CONSUMABLE,unit:'pcs',qty:'100',warn:'30',reorder:'20',price:null},
+
+/*
+ * ============================================================
+ * LOAD SEED PASSWORDS FROM ENV
+ * ============================================================
+ */
+
+const ADMIN_PASSWORD =
+  requiredEnv(
+    'SEED_ADMIN_PASSWORD',
+  );
+
+const CASHIER_PASSWORD =
+  requiredEnv(
+    'SEED_CASHIER_PASSWORD',
+  );
+
+const VIEWER_PASSWORD =
+  requiredEnv(
+    'SEED_VIEWER_PASSWORD',
+  );
+
+/*
+ * ============================================================
+ * PRISMA
+ * ============================================================
+ */
+
+const prisma =
+  new PrismaClient();
+
+/*
+ * ============================================================
+ * USER ACCOUNTS
+ * ============================================================
+ */
+
+const users = [
+  {
+    username:
+      'duque-admin',
+
+    displayName:
+      'Estylo Admin',
+
+    role:
+      UserRole.ADMIN,
+
+    password:
+      ADMIN_PASSWORD,
+  },
+
+  {
+    username:
+      'cashier',
+
+    displayName:
+      'Estylo Cashier',
+
+    role:
+      UserRole.CASHIER,
+
+    password:
+      CASHIER_PASSWORD,
+  },
+
+  {
+    username:
+      'viewer',
+
+    displayName:
+      'Report Viewer',
+
+    role:
+      UserRole.VIEWER,
+
+    password:
+      VIEWER_PASSWORD,
+  },
 ];
-for (const x of list) {
- const item=await prisma.inventoryItem.upsert({where:{sku:x.sku},update:{name:x.name,type:x.type,unit:x.unit,sellingPrice:x.price},create:{sku:x.sku,name:x.name,type:x.type,unit:x.unit,quantityOnHand:x.qty,warningLevel:x.warn,reorderLevel:x.reorder,sellingPrice:x.price}});
- if(await prisma.inventoryMovement.count({where:{inventoryItemId:item.id}})===0) await prisma.inventoryMovement.create({data:{inventoryItemId:item.id,movementType:InventoryMovementType.INITIAL_BALANCE,quantity:x.qty,quantityBefore:0,quantityAfter:x.qty,reason:'Seed initial balance',createdById:admin.id}});
+
+for (const user of users) {
+  const passwordHash =
+    await argon2.hash(
+      user.password,
+    );
+
+  await prisma.user.upsert({
+    where: {
+      username:
+        user.username,
+    },
+
+    update: {
+      displayName:
+        user.displayName,
+
+      role:
+        user.role,
+
+      active:
+        true,
+
+      passwordHash,
+    },
+
+    create: {
+      username:
+        user.username,
+
+      displayName:
+        user.displayName,
+
+      role:
+        user.role,
+
+      active:
+        true,
+
+      passwordHash,
+    },
+  });
 }
-const haircut=await prisma.service.findUniqueOrThrow({where:{code:'HAIRCUT'}}), razor=await prisma.inventoryItem.findUniqueOrThrow({where:{sku:'RAZOR'}});
-await prisma.serviceInventoryUsage.upsert({where:{serviceId_inventoryItemId:{serviceId:haircut.id,inventoryItemId:razor.id}},update:{quantity:1},create:{serviceId:haircut.id,inventoryItemId:razor.id,quantity:1}});
-await prisma.shopSetting.upsert({where:{id:'default'},update:{},create:{id:'default',shopName:'Estylo Barbers',currency:'PHP',timezone:'Asia/Manila'}});
-console.log('Estylo seed complete. DEVELOPMENT password: Estylo123!');
+
+/*
+ * ============================================================
+ * DISABLE LEGACY ADMIN ACCOUNT
+ * ============================================================
+ *
+ * If the original seed created username "admin",
+ * keep the database record for historical references,
+ * but disable login access.
+ * ============================================================
+ */
+
+await prisma.user.updateMany({
+  where: {
+    username:
+      'admin',
+  },
+
+  data: {
+    active:
+      false,
+  },
+});
+
+/*
+ * ============================================================
+ * GET ADMIN ACCOUNT
+ * ============================================================
+ */
+
+const admin =
+  await prisma.user.findUniqueOrThrow({
+    where: {
+      username:
+        'duque-admin',
+    },
+  });
+
+/*
+ * ============================================================
+ * BARBER SEATS
+ * ============================================================
+ */
+
+for (
+  const number
+  of [1, 2, 3]
+) {
+  await prisma.seat.upsert({
+    where: {
+      number,
+    },
+
+    update: {
+      active:
+        true,
+    },
+
+    create: {
+      number,
+
+      name:
+        `Seat ${number}`,
+
+      active:
+        true,
+    },
+  });
+}
+
+/*
+ * ============================================================
+ * BARBERS
+ * ============================================================
+ */
+
+for (
+  const [
+    index,
+    name,
+  ] of [
+    'Carlo',
+    'Miguel',
+    'James',
+  ].entries()
+) {
+  await prisma.barber.upsert({
+    where: {
+      code:
+        `BARBER-${index + 1}`,
+    },
+
+    update: {
+      name,
+
+      active:
+        true,
+
+      displayOrder:
+        index + 1,
+    },
+
+    create: {
+      code:
+        `BARBER-${index + 1}`,
+
+      name,
+
+      displayOrder:
+        index + 1,
+
+      active:
+        true,
+    },
+  });
+}
+
+/*
+ * ============================================================
+ * SERVICES
+ * ============================================================
+ */
+
+const services = [
+  {
+    code:
+      'HAIRCUT',
+
+    name:
+      'Haircut',
+
+    fee:
+      '300.00',
+
+    displayOrder:
+      1,
+  },
+
+  {
+    code:
+      'KIDS',
+
+    name:
+      'Kids Haircut',
+
+    fee:
+      '250.00',
+
+    displayOrder:
+      2,
+  },
+
+  {
+    code:
+      'BEARD',
+
+    name:
+      'Beard Trim',
+
+    fee:
+      '150.00',
+
+    displayOrder:
+      3,
+  },
+
+  {
+    code:
+      'CUT-BEARD',
+
+    name:
+      'Haircut + Beard',
+
+    fee:
+      '400.00',
+
+    displayOrder:
+      4,
+  },
+];
+
+for (
+  const service
+  of services
+) {
+  await prisma.service.upsert({
+    where: {
+      code:
+        service.code,
+    },
+
+    update: {
+      name:
+        service.name,
+
+      fee:
+        service.fee,
+
+      displayOrder:
+        service.displayOrder,
+
+      active:
+        true,
+    },
+
+    create: {
+      code:
+        service.code,
+
+      name:
+        service.name,
+
+      fee:
+        service.fee,
+
+      displayOrder:
+        service.displayOrder,
+
+      active:
+        true,
+    },
+  });
+}
+
+/*
+ * ============================================================
+ * INVENTORY
+ *
+ * No automatic service consumable mappings are created.
+ * ============================================================
+ */
+
+const inventoryItems = [
+  {
+    sku:
+      'POMADE',
+
+    name:
+      'Pomade',
+
+    type:
+      InventoryType.RETAIL,
+
+    unit:
+      'pcs',
+
+    qty:
+      '20',
+
+    warn:
+      '8',
+
+    reorder:
+      '4',
+
+    price:
+      '350.00',
+  },
+
+  {
+    sku:
+      'SHAMPOO',
+
+    name:
+      'Shampoo',
+
+    type:
+      InventoryType.RETAIL_AND_CONSUMABLE,
+
+    unit:
+      'ml',
+
+    qty:
+      '5000',
+
+    warn:
+      '1200',
+
+    reorder:
+      '600',
+
+    price:
+      '280.00',
+  },
+
+  {
+    sku:
+      'WAX',
+
+    name:
+      'Hair Wax',
+
+    type:
+      InventoryType.RETAIL_AND_CONSUMABLE,
+
+    unit:
+      'ml',
+
+    qty:
+      '1500',
+
+    warn:
+      '400',
+
+    reorder:
+      '200',
+
+    price:
+      '320.00',
+  },
+
+  {
+    sku:
+      'RAZOR',
+
+    name:
+      'Razor Blade',
+
+    type:
+      InventoryType.CONSUMABLE,
+
+    unit:
+      'pcs',
+
+    qty:
+      '100',
+
+    warn:
+      '30',
+
+    reorder:
+      '20',
+
+    price:
+      null,
+  },
+];
+
+for (
+  const itemData
+  of inventoryItems
+) {
+  const item =
+    await prisma.inventoryItem.upsert({
+      where: {
+        sku:
+          itemData.sku,
+      },
+
+      update: {
+        name:
+          itemData.name,
+
+        type:
+          itemData.type,
+
+        unit:
+          itemData.unit,
+
+        sellingPrice:
+          itemData.price,
+
+        active:
+          true,
+      },
+
+      create: {
+        sku:
+          itemData.sku,
+
+        name:
+          itemData.name,
+
+        type:
+          itemData.type,
+
+        unit:
+          itemData.unit,
+
+        quantityOnHand:
+          itemData.qty,
+
+        warningLevel:
+          itemData.warn,
+
+        reorderLevel:
+          itemData.reorder,
+
+        sellingPrice:
+          itemData.price,
+
+        active:
+          true,
+      },
+    });
+
+  /*
+   * Create INITIAL_BALANCE only when this
+   * inventory item has no previous movements.
+   *
+   * This prevents rerunning the seed from
+   * repeatedly adding inventory.
+   */
+
+  const movementCount =
+    await prisma.inventoryMovement.count({
+      where: {
+        inventoryItemId:
+          item.id,
+      },
+    });
+
+  if (
+    movementCount === 0
+  ) {
+    await prisma.inventoryMovement.create({
+      data: {
+        inventoryItemId:
+          item.id,
+
+        movementType:
+          InventoryMovementType.INITIAL_BALANCE,
+
+        quantity:
+          itemData.qty,
+
+        quantityBefore:
+          0,
+
+        quantityAfter:
+          itemData.qty,
+
+        reason:
+          'Seed initial balance',
+
+        createdById:
+          admin.id,
+      },
+    });
+  }
+}
+
+/*
+ * ============================================================
+ * SHOP SETTINGS
+ * ============================================================
+ */
+
+await prisma.shopSetting.upsert({
+  where: {
+    id:
+      'default',
+  },
+
+  update: {
+    shopName:
+      'Estylo Barbers',
+
+    currency:
+      'PHP',
+
+    timezone:
+      'Asia/Manila',
+  },
+
+  create: {
+    id:
+      'default',
+
+    shopName:
+      'Estylo Barbers',
+
+    currency:
+      'PHP',
+
+    timezone:
+      'Asia/Manila',
+  },
+});
+
+/*
+ * ============================================================
+ * COMPLETED
+ * ============================================================
+ *
+ * Passwords are intentionally NOT printed.
+ * ============================================================
+ */
+
+console.log('');
+console.log(
+  'Estylo database seed completed successfully.',
+);
+console.log('');
+console.log(
+  `Environment loaded from: ${envPath}`,
+);
+console.log('');
+console.log(
+  'Accounts created/updated:',
+);
+console.log(
+  '- duque-admin (ADMIN)',
+);
+console.log(
+  '- cashier (CASHIER)',
+);
+console.log(
+  '- viewer (VIEWER)',
+);
+console.log('');
+console.log(
+  'Passwords were loaded from environment variables.',
+);
+console.log('');
+
 await prisma.$disconnect();
