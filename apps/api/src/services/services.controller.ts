@@ -1,0 +1,15 @@
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { UserRole } from '@prisma/client'; import { IsNumberString, IsUUID } from 'class-validator';
+import { AuthGuard } from '../auth/auth.guard'; import { RolesGuard } from '../auth/roles.guard'; import { AuthUser, CurrentUser } from '../common/current-user.decorator'; import { Roles } from '../common/roles.decorator'; import { PrismaService } from '../prisma/prisma.service';
+import { CreateServiceDto, UpdateServiceDto } from './services.dto';
+class UsageDto { @IsUUID() inventoryItemId!:string; @IsNumberString() quantity!:string; }
+@Controller('services') @UseGuards(AuthGuard, RolesGuard)
+export class ServicesController {
+ constructor(private prisma: PrismaService) {}
+ @Get() @Roles(UserRole.ADMIN,UserRole.CASHIER) list(){ return this.prisma.service.findMany({ where:{active:true}, include:{inventoryUsage:{include:{inventoryItem:true}}}, orderBy:[{displayOrder:'asc'},{name:'asc'}] }); }
+ @Get('all') @Roles(UserRole.ADMIN) all(){ return this.prisma.service.findMany({ include:{inventoryUsage:{include:{inventoryItem:true}}}, orderBy:[{displayOrder:'asc'},{name:'asc'}] }); }
+ @Post() @Roles(UserRole.ADMIN) async create(@Body() dto:CreateServiceDto,@CurrentUser() actor:AuthUser){ const service=await this.prisma.service.create({data:dto}); await this.prisma.auditLog.create({data:{event:'SERVICE_CREATED',entityType:'Service',entityId:service.id,userId:actor.id,newValue:{code:service.code,name:service.name,fee:service.fee.toString()}}}); return service; }
+ @Patch(':id') @Roles(UserRole.ADMIN) async update(@Param('id') id:string,@Body() dto:UpdateServiceDto,@CurrentUser() actor:AuthUser){ const old=await this.prisma.service.findUniqueOrThrow({where:{id}}); const service=await this.prisma.service.update({where:{id},data:dto}); await this.prisma.auditLog.create({data:{event: old.fee.toString() !== service.fee.toString() ? 'SERVICE_PRICE_CHANGED':'SERVICE_UPDATED',entityType:'Service',entityId:id,userId:actor.id,oldValue:{name:old.name,fee:old.fee.toString(),active:old.active},newValue:{name:service.name,fee:service.fee.toString(),active:service.active}}}); return service; }
+ @Post(':id/inventory-usage') @Roles(UserRole.ADMIN) async usage(@Param('id')serviceId:string,@Body()dto:UsageDto,@CurrentUser()actor:AuthUser){ const row=await this.prisma.serviceInventoryUsage.upsert({where:{serviceId_inventoryItemId:{serviceId,inventoryItemId:dto.inventoryItemId}},update:{quantity:dto.quantity},create:{serviceId,inventoryItemId:dto.inventoryItemId,quantity:dto.quantity}}); await this.prisma.auditLog.create({data:{event:'SERVICE_INVENTORY_USAGE_UPDATED',entityType:'Service',entityId:serviceId,userId:actor.id,newValue:{inventoryItemId:dto.inventoryItemId,quantity:dto.quantity}}}); return row; }
+ @Delete(':id/inventory-usage/:itemId') @Roles(UserRole.ADMIN) async removeUsage(@Param('id')serviceId:string,@Param('itemId')inventoryItemId:string){ await this.prisma.serviceInventoryUsage.delete({where:{serviceId_inventoryItemId:{serviceId,inventoryItemId}}}); return {ok:true}; }
+}

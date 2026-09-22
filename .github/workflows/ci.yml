@@ -1,0 +1,34 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: estylo
+          POSTGRES_USER: estylo
+          POSTGRES_PASSWORD: estylo
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U estylo -d estylo"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://estylo:estylo@localhost:5432/estylo?schema=public
+      JWT_SECRET: ci-only-secret
+      TZ: Asia/Manila
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run db:generate
+      - run: npm --workspace apps/api run prisma:push
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
