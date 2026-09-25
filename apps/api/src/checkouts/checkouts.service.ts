@@ -86,12 +86,186 @@ export class CheckoutsService {
     return { checkoutId:checkout.id, serviceTransaction:service?{transactionId:service.transactionId,amount:service.serviceAmount.toFixed(2),tip:service.tipAmount.toFixed(2)}:null, itemTransaction:item?{transactionId:item.transactionId,amount:item.amount.toFixed(2)}:null, totalCollected:total.toFixed(2) };
   }
 
-  async list() {
-    const [services,items]=await Promise.all([
-      this.prisma.serviceTransaction.findMany({include:{cashier:{select:{displayName:true}},barber:true,seat:true},orderBy:{createdAt:'desc'},take:250}),
-      this.prisma.itemTransaction.findMany({include:{cashier:{select:{displayName:true}}},orderBy:{createdAt:'desc'},take:250}),
+  async list(query: {
+    page?: string;
+    pageSize?: string;
+    type?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    barberId?: string;
+  }) {
+    const requestedPage = Number(query.page ?? '1');
+    const requestedPageSize = Number(query.pageSize ?? '50');
+
+    const page =
+      Number.isInteger(requestedPage) && requestedPage > 0
+        ? requestedPage
+        : 1;
+
+    const pageSize = [50, 100, 150].includes(requestedPageSize)
+      ? requestedPageSize
+      : 50;
+
+    const type = (query.type ?? 'ALL').toUpperCase();
+
+    if (!['ALL', 'SERVICE', 'ITEM'].includes(type)) {
+      throw new BadRequestException('Invalid transaction type filter');
+    }
+
+    const dateFilter: Prisma.DateTimeFilter = {};
+    let fromDate: Date | undefined;
+    let toExclusive: Date | undefined;
+
+    if (query.dateFrom) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(query.dateFrom)) {
+        throw new BadRequestException('Invalid Date From value');
+      }
+
+      fromDate = new Date(`${query.dateFrom}T00:00:00+08:00`);
+      dateFilter.gte = fromDate;
+    }
+
+    if (query.dateTo) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(query.dateTo)) {
+        throw new BadRequestException('Invalid Date To value');
+      }
+
+      toExclusive = new Date(`${query.dateTo}T00:00:00+08:00`);
+      toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+      dateFilter.lt = toExclusive;
+    }
+
+    if (
+      fromDate &&
+      toExclusive &&
+      fromDate.getTime() >= toExclusive.getTime()
+    ) {
+      throw new BadRequestException('Date From cannot be later than Date To');
+    }
+
+    const serviceWhere: Prisma.ServiceTransactionWhereInput = {};
+    const itemWhere: Prisma.ItemTransactionWhereInput = {};
+
+    if (dateFilter.gte || dateFilter.lt) {
+      serviceWhere.createdAt = dateFilter;
+      itemWhere.createdAt = dateFilter;
+    }
+
+    if (query.barberId) {
+      serviceWhere.barberId = query.barberId;
+    }
+
+    const includeServices = type !== 'ITEM';
+    const includeItems = type !== 'SERVICE' && !query.barberId;
+
+    const [services, items] = await Promise.all([
+      includeServices
+        ? this.prisma.serviceTransaction.findMany({
+            where: serviceWhere,
+            select: {
+              transactionId: true,
+              createdAt: true,
+              serviceAmount: true,
+              tipAmount: true,
+              status: true,
+              cashier: {
+                select: {
+                  displayName: true,
+                },
+              },
+              barber: {
+                select: {
+                  name: true,
+                },
+              },
+              seat: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          })
+        : Promise.resolve([]),
+
+      includeItems
+        ? this.prisma.itemTransaction.findMany({
+            where: itemWhere,
+            select: {
+              transactionId: true,
+              createdAt: true,
+              amount: true,
+              status: true,
+              cashier: {
+                select: {
+                  displayName: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          })
+        : Promise.resolve([]),
     ]);
-    return [...services.map(t=>({transactionId:t.transactionId,type:'SERVICE',createdAt:t.createdAt,amount:t.serviceAmount.toFixed(2),tip:t.tipAmount.toFixed(2),status:t.status,cashier:t.cashier.displayName,barber:t.barber.name,seat:t.seat.name})),...items.map(t=>({transactionId:t.transactionId,type:'ITEM',createdAt:t.createdAt,amount:t.amount.toFixed(2),tip:'0.00',status:t.status,cashier:t.cashier.displayName,barber:null,seat:null}))].sort((a,b)=>+new Date(b.createdAt)-+new Date(a.createdAt));
+
+    const rows = [
+      ...services.map((transaction) => ({
+        transactionId: transaction.transactionId,
+        type: 'SERVICE' as const,
+        createdAt: transaction.createdAt,
+        amount: transaction.serviceAmount.toFixed(2),
+        tip: transaction.tipAmount.toFixed(2),
+        status: transaction.status,
+        cashier: transaction.cashier.displayName,
+        barber: transaction.barber.name,
+        seat: transaction.seat.name,
+      })),
+
+      ...items.map((transaction) => ({
+        transactionId: transaction.transactionId,
+        type: 'ITEM' as const,
+        createdAt: transaction.createdAt,
+        amount: transaction.amount.toFixed(2),
+        tip: '0.00',
+        status: transaction.status,
+        cashier: transaction.cashier.displayName,
+        barber: null,
+        seat: null,
+      })),
+    ].sort(
+      (a, b) =>
+        b.createdAt.getTime() - a.createdAt.getTime(),
+    );
+
+    const total = rows.length;
+
+    const sumTotalAmount = rows.reduce(
+      (sum, transaction) =>
+        sum
+          .add(new Prisma.Decimal(transaction.amount))
+          .add(new Prisma.Decimal(transaction.tip)),
+      new Prisma.Decimal(0),
+    );
+
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const start = (safePage - 1) * pageSize;
+
+    return {
+      data: rows.slice(start, start + pageSize),
+      pagination: {
+        page: safePage,
+        pageSize,
+        total,
+        totalPages,
+      },
+      summary: {
+        sumTotalAmount: sumTotalAmount.toFixed(2),
+      },
+    };
   }
 
   async get(transactionId:string){
