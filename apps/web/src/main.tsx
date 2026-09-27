@@ -1,8 +1,134 @@
-import React from 'react'; import ReactDOM from 'react-dom/client'; import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import 'bootstrap/dist/css/bootstrap.min.css'; import 'bootstrap-icons/font/bootstrap-icons.css'; import './styles.css';
-import { AuthProvider } from './auth/AuthContext'; import { ProtectedRoute } from './auth/ProtectedRoute'; import { AppLayout } from './components/AppLayout';
-import { LoginPage } from './pages/LoginPage'; import { DashboardPage } from './pages/DashboardPage'; import { CashierPage } from './pages/CashierPage'; import { InventoryPage } from './pages/InventoryPage'; import { ServicesPage } from './pages/ServicesPage'; import { UsersPage } from './pages/UsersPage'; import { ReportsPage } from './pages/ReportsPage'; import { TransactionsPage } from './pages/TransactionsPage'; import { AuditPage } from './pages/AuditPage'; import { BarbersPage } from './pages/BarbersPage';
-function App(){return <Routes><Route path="/login" element={<LoginPage/>}/><Route element={<ProtectedRoute roles={['ADMIN','VIEWER']}><AppLayout/></ProtectedRoute>}><Route path="/dashboard" element={<ProtectedRoute roles={['ADMIN']}><DashboardPage/></ProtectedRoute>}/><Route path="/transactions" element={<ProtectedRoute roles={['ADMIN']}><TransactionsPage/></ProtectedRoute>}/><Route path="/inventory" element={<ProtectedRoute roles={['ADMIN']}><InventoryPage/></ProtectedRoute>}/><Route path="/reports" element={<ProtectedRoute roles={['ADMIN','VIEWER']}><ReportsPage/></ProtectedRoute>}/><Route path="/maintenance/services" element={<ProtectedRoute roles={['ADMIN']}><ServicesPage/></ProtectedRoute>}/><Route path="/maintenance/barbers" element={<ProtectedRoute roles={['ADMIN']}><BarbersPage/></ProtectedRoute>}/><Route path="/maintenance/users" element={<ProtectedRoute roles={['ADMIN']}><UsersPage/></ProtectedRoute>}/><Route path="/maintenance/audit" element={<ProtectedRoute roles={['ADMIN']}><AuditPage/></ProtectedRoute>}/></Route><Route path="/cashier" element={<ProtectedRoute roles={['ADMIN','CASHIER']}><CashierPage/></ProtectedRoute>}/><Route path="*" element={<Navigate to="/login" replace/>}/></Routes>}
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><BrowserRouter><AuthProvider><App/></AuthProvider></BrowserRouter></React.StrictMode>);
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap-icons/font/bootstrap-icons.css';
+import './styles.css';
+import { AuthProvider } from './auth/AuthContext';
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import { AppLayout } from './components/AppLayout';
+import { LoginPage } from './pages/LoginPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { CashierPage } from './pages/CashierPage';
+import { InventoryPage } from './pages/InventoryPage';
+import { ServicesPage } from './pages/ServicesPage';
+import { UsersPage } from './pages/UsersPage';
+import { ReportsPage } from './pages/ReportsPage';
+import { TransactionsPage } from './pages/TransactionsPage';
+import { AuditPage } from './pages/AuditPage';
+import { BarbersPage } from './pages/BarbersPage';
 
-if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>undefined));
+function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+
+      <Route
+        element={
+          <ProtectedRoute roles={['ADMIN', 'VIEWER', 'CASHIER']}>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/transactions"
+          element={
+            <ProtectedRoute roles={['ADMIN', 'CASHIER']}>
+              <TransactionsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/inventory"
+          element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <InventoryPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute roles={['ADMIN', 'VIEWER']}>
+              <ReportsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/maintenance/services"
+          element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <ServicesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/maintenance/barbers"
+          element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <BarbersPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/maintenance/users"
+          element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <UsersPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/maintenance/audit"
+          element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <AuditPage />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
+
+      <Route
+        path="/cashier"
+        element={
+          <ProtectedRoute roles={['ADMIN', 'CASHIER']}>
+            <CashierPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
+  </React.StrictMode>,
+);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+  });
+}

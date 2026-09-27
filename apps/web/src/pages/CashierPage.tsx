@@ -727,7 +727,16 @@ export function CashierPage() {
 
           <small>
             Cashier ·{' '}
-
+            <button
+              type="button"
+              className="btn btn-estylo btn-sm"
+              onClick={() => {
+                window.location.href = '/transactions';
+              }}
+            >
+              <i className="bi bi-receipt me-1"></i>
+              Transactions
+            </button>
             <button
               type="button"
               className="btn btn-link btn-sm p-0 text-secondary"
